@@ -3,3 +3,5 @@ node_modules/
 .env
 debug_captcha.png
 *.pdf
+# No ignorar el cache de puppeteer para Render
+# .cache/
