@@ -58,8 +58,7 @@ app.post('/generar-pdf', async (req, res) => {
   try {
     console.log(`📄 Iniciando generación de PDF para: ${query}`);
 
-    // Configuración para Render: usar Chromium del sistema
-    const launchOptions = {
+    browser = await puppeteer.launch({
       headless: "new",
       args: [
         '--no-sandbox',
@@ -67,14 +66,7 @@ app.post('/generar-pdf', async (req, res) => {
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled'
       ]
-    };
-
-    // Si estamos en Render (detectar por variable de entorno), usar chromium-browser
-    if (process.env.RENDER) {
-      launchOptions.executablePath = '/usr/bin/chromium-browser';
-    }
-
-    browser = await puppeteer.launch(launchOptions);
+    });
 
     const page = await browser.newPage();
 
