@@ -327,6 +327,37 @@ app.get('/proxy-health', async (req, res) => {
   }
 });
 
+// API: consultar datos por DNI (mock local o proxy a servicio externo si está configurado)
+app.get('/api/dni/:dni', async (req, res) => {
+  const { dni } = req.params;
+  if (!/^[0-9]{8}$/.test(dni)) return res.status(400).json({ ok: false, error: 'dni_invalid', message: 'El DNI debe tener 8 dígitos numéricos' });
+
+  // Si existe una URL externa, reenvía la petición
+  const upstream = process.env.DNI_API_URL;
+  if (upstream) {
+    try {
+      const base = upstream.replace(/\/$/, '');
+      const r = await axios.get(`${base}/api/dni/${dni}`, { timeout: 10000 });
+      return res.status(r.status).json(r.data);
+    } catch (e) {
+      return res.status(502).json({ ok: false, error: 'upstream_error', details: e.message });
+    }
+  }
+
+  // Respuesta mock para pruebas locales / despliegue rápido
+  const mock = {
+    dni,
+    nombres: 'JUAN CARLOS',
+    apellido_paterno: 'PEREZ',
+    apellido_materno: 'GOMEZ',
+    fecha_nacimiento: '1987-06-15',
+    distrito: 'LIMA',
+    departamento: 'LIMA',
+    estado: 'ACTIVO'
+  };
+  return res.json({ ok: true, source: 'mock', data: mock });
+});
+
 const server = app.listen(PORT, () => console.log(`🚀 Servidor en http://localhost:${PORT}`));
 
 server.on('error', (e) => {
