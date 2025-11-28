@@ -1,0 +1,22 @@
+{
+  "name": "buscador-app",
+  "version": "1.0.0",
+  "description": "Aplicación de búsqueda con generación de PDFs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@antiadmin/anticaptchaofficial": "^1.0.55",
+    "axios": "^1.13.2",
+    "express": "^5.1.0",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^24.30.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-recaptcha": "^3.6.8",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

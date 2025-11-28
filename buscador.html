@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Buscador de Páginas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Ocultar el link de descarga al cargar
+            $(function () { $("#descargar-archivo-container").hide(); });
+            // Botón limpiar refresca la página y limpia las celdas de estado
+            $(document).on('click', '#btn-limpiar', function () {
+                // Limpiar las celdas de estado antes de recargar
+                $('.estado-loading').html('');
+                // Opcional: limpiar los campos del formulario
+                // $('#buscadorForm')[0].reset();
+                // Recargar la página
+                location.reload();
+            });
+
+            // Validar entrada de solo números en tiempo real
+            $('#numero_documento').on('keypress', function (e) {
+                // Permitir solo números (códigos 48-57 son 0-9)
+                var charCode = (e.which) ? e.which : e.keyCode;
+                if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+                    e.preventDefault();
+                    return false;
+                }
+                return true;
+            });
+
+            // Limpiar campos cuando cambia el tipo de documento
+            $('#tipo_documento').on('change', function () {
+                $('#numero_documento').val('');
+                $('#nombres').val('');
+                var tipo = $(this).val();
+
+                // Habilitar campo nombres para ingreso manual en CARNET EXTRANJERÍA y PASAPORTE
+                if (tipo === 'CARNET EXTRANJERÍA' || tipo === 'PASAPORTE') {
+                    $('#nombres').prop('readonly', false).attr('placeholder', 'Ingrese nombres manualmente');
+                } else if (tipo === 'DNI' || tipo === 'RUC') {
+                    $('#nombres').prop('readonly', false).attr('placeholder', 'Se autocompletará al ingresar el número');
+                }
+            });
+
+            // Validación y autocompletado según tipo de documento
+            // Búsqueda manual al hacer clic en el botón
+            $('#btn-buscar-documento').on('click', function () {
+                var tipo = $('#tipo_documento').val();
+                var numero = $('#numero_documento').val().trim();
+
+                if (!tipo) {
+                    alert('Seleccione un tipo de documento');
+                    return;
+                }
+                if (!numero) {
+                    alert('Ingrese un número de documento');
+                    return;
+                }
+
+                // Validar formato según tipo de documento
+                if (tipo === 'DNI') {
+                    if (numero.length === 8) {
+                        consultarDNI(numero);
+                    } else {
+                        alert('El DNI debe tener 8 dígitos');
+                    }
+                } else if (tipo === 'RUC') {
+                    if (numero.length === 11) {
+                        if (numero.startsWith('10') || numero.startsWith('20')) {
+                            consultarRUC(numero);
+                        } else {
+                            $('#nombres').val('');
+                            alert('El RUC debe empezar con 10 o 20');
+                        }
+                    } else {
+                        alert('El RUC debe tener 11 dígitos');
+                    }
+                } else {
+                    alert('Para este tipo de documento el ingreso es manual');
+                }
+            });
+
+            // Función para consultar DNI
+            function consultarDNI(dni) {
+                var $btn = $('#btn-buscar-documento');
+                var originalText = $btn.html();
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando...');
+                $('#nombres').val('Consultando DNI...').prop('readonly', true);
+
+                $.ajax({
+                    url: '/api/dni/' + dni,
+                    method: 'GET',
+                    success: function (response) {
+                        if (response && response.data[0] && response.data[0].NOMBRES) {
+                            var nombreCompleto = response.data[0].NOMBRES + ' ' + response.data[0].AP_PAT + ' ' + response.data[0].AP_MAT;
+                            $('#nombres').val(nombreCompleto.toUpperCase()).prop('readonly', false);
+                        } else {
+                            $('#nombres').val('').prop('readonly', false);
+                            alert('No se encontró información para este DNI');
+                        }
+                    },
+                    error: function () {
+                        $('#nombres').val('').prop('readonly', false);
+                        alert('Error al consultar el servicio de DNI');
+                    },
+                    complete: function () {
+                        $btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            }
+
+            // Función para consultar RUC
+            function consultarRUC(ruc) {
+                var $btn = $('#btn-buscar-documento');
+                var originalText = $btn.html();
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando...');
+                $('#nombres').val('Consultando RUC...').prop('readonly', true);
+
+                $.ajax({
+                    url: '/api/ruc/' + ruc,
+                    method: 'GET',
+                    success: function (response) {
+                        if (response && response.data && response.data.nombre_o_razon_social) {
+                            $('#nombres').val(response.data.nombre_o_razon_social).prop('readonly', false);
+                        } else {
+                            $('#nombres').val('').prop('readonly', false);
+                            alert('No se encontró información para este RUC');
+                        }
+                    },
+                    error: function () {
+                        $('#nombres').val('').prop('readonly', false);
+                        alert('Error al consultar el servicio de RUC');
+                    },
+                    complete: function () {
+                        $btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            }
+
+            var form = document.getElementById('buscadorForm');
+            if (form) {
+                form.addEventListener('submit', function (e) {
+                    var tipo = document.getElementById('tipo_documento').value.trim();
+                    var numero = document.getElementById('numero_documento').value.trim();
+                    var nombres = document.getElementById('nombres').value.trim();
+
+                    if (!tipo || !numero || !nombres) {
+                        e.preventDefault();
+                        alert('Por favor, complete todos los campos antes de continuar.');
+                        return;
+                    }
+
+                    var soloNumeros = /^\d+$/;
+                    if (!soloNumeros.test(numero)) {
+                        e.preventDefault();
+                        alert('El campo "Número de Documento" solo debe contener números.');
+                        document.getElementById('numero_documento').focus();
+                        return;
+                    }
+
+                    // Validaciones específicas por tipo de documento
+                    if (tipo === 'DNI') {
+                        if (numero.length !== 8) {
+                            e.preventDefault();
+                            alert('El DNI debe tener exactamente 8 dígitos.');
+                            document.getElementById('numero_documento').focus();
+                            return;
+                        }
+                    } else if (tipo === 'RUC') {
+                        if (numero.length !== 11) {
+                            e.preventDefault();
+                            alert('El RUC debe tener exactamente 11 dígitos.');
+                            document.getElementById('numero_documento').focus();
+                            return;
+                        }
+                        if (!numero.startsWith('10') && !numero.startsWith('20')) {
+                            e.preventDefault();
+                            alert('El RUC debe empezar con 10 o 20.');
+                            document.getElementById('numero_documento').focus();
+                            return;
+                        }
+                    }
+
+                    // Animación de loading fila por fila
+                    e.preventDefault(); // Evita el submit real para mostrar la animación
+                    $("#descargar-archivo-container").hide();
+                    $(".estado-loading").each(function (i, el) {
+                        var $td = $(el);
+                        $td.html('<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div></div>');
+                    });
+
+                    function cargarFila(idx) {
+                        var $td = $(".estado-loading").eq(idx);
+                        var $bar = $td.find('.progress-bar');
+                        var porcentaje = 0;
+                        var interval = setInterval(function () {
+                            porcentaje += 10;
+                            $bar.css('width', porcentaje + '%').text(porcentaje + '%');
+                            if (porcentaje >= 100) {
+                                clearInterval(interval);
+                                $bar.removeClass('progress-bar-animated progress-bar-striped').addClass('bg-success').text('Completado');
+                                if (idx + 1 < $(".estado-loading").length) {
+                                    setTimeout(function () { cargarFila(idx + 1); }, 300);
+                                } else {
+                                    // Mostrar el link con animación vistosa
+                                    setTimeout(function () {
+                                        var $container = $("#descargar-archivo-container");
+                                        $container.hide();
+                                        $container.css({ opacity: 0, transform: 'scale(0.8)' }).show().animate({ opacity: 1 }, 500);
+                                        $({ scale: 0.8 }).animate({ scale: 1 }, {
+                                            duration: 500,
+                                            step: function (now) {
+                                                $container.css('transform', 'scale(' + now + ')');
+                                            },
+                                            complete: function () {
+                                                $container.css('transform', 'scale(1)');
+                                            }
+                                        });
+                                        $("#descargar-archivo-link").addClass("text-success").fadeOut(100).fadeIn(400);
+
+                                        // --- INTEGRACIÓN BÚSQUEDAS AUTOMÁTICAS DE GOOGLE ---
+                                        var nombres = $('#nombres').val();
+
+                                        // Búsqueda 1: LAVADO DE ACTIVOS (fila 2)
+                                        var observacion1 = $('table tbody tr').eq(1).find('td').eq(3).text().trim();
+                                        var query1 = encodeURIComponent(nombres + ' ' + observacion1);
+                                        window.open('https://www.google.com/search?q=' + query1, '_blank');
+
+                                        // Pequeño delay para evitar bloqueo del navegador
+                                        setTimeout(function () {
+                                            // Búsqueda 2: DELITOS (fila 3)
+                                            var observacion2 = $('table tbody tr').eq(2).find('td').eq(3).text().trim();
+                                            var query2 = encodeURIComponent(nombres + ' ' + observacion2);
+                                            window.open('https://www.google.com/search?q=' + query2, '_blank');
+                                        }, 500);
+
+                                        // --- GENERACIÓN DEL PDF ---
+                                        var $link = $("#descargar-archivo-link");
+                                        $link.text("Generando reporte con IA...").removeClass("text-success").addClass("text-warning");
+                                        $link.css('pointer-events', 'none'); // Deshabilitar clic mientras carga
+
+                                        var observacionPDF = $('table tbody tr').eq(1).find('td').eq(3).text().trim(); // LAVADO DE ACTIVOS
+                                        var queryPDF = nombres + ' ' + observacionPDF;
+
+                                        fetch('/generar-pdf', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ query: queryPDF })
+                                        })
+                                            .then(response => {
+                                                if (!response.ok) throw new Error('Error al generar PDF');
+                                                return response.blob();
+                                            })
+                                            .then(blob => {
+                                                var url = window.URL.createObjectURL(blob);
+                                                $link.attr('href', url);
+                                                $link.attr('download', 'Reporte_IA_' + nombres.replace(/\s+/g, '_') + '.pdf');
+                                                $link.text("Descargar reporte PDF").removeClass("text-warning").addClass("text-success");
+                                                $link.css('pointer-events', 'auto'); // Habilitar clic
+                                            })
+                                            .catch(error => {
+                                                console.error('Error:', error);
+                                                $link.text("Error al generar reporte").removeClass("text-warning").addClass("text-danger");
+                                            });
+
+                                    }, 400);
+                                }
+                            }
+                        }, 60);
+                    }
+                    cargarFila(0);
+                });
+            }
+        });
+    </script>
+</head>
+
+<body>
+    <div class="container mt-5 mb-4">
+        <div class="row justify-content-center">
+            <div class="col-md-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="card-title text-center mb-4">Buscador de Páginas</h2>
+                        <form action="" method="post" id="buscadorForm" autocomplete="off">
+                            <div class="mb-3">
+                                <label for="tipo_documento" class="form-label">Ingresar tipo de documento:</label>
+                                <select id="tipo_documento" name="tipo_documento" class="form-select" required>
+                                    <option value="">Seleccione...</option>
+                                    <option value="DNI">DNI</option>
+                                    <option value="CARNET EXTRANJERÍA">CARNET EXTRANJERÍA</option>
+                                    <option value="PASAPORTE">PASAPORTE</option>
+                                    <option value="RUC">RUC</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="numero_documento" class="form-label">Ingresar Número de Documento:</label>
+                                <div class="input-group">
+                                    <input type="text" id="numero_documento" name="numero_documento"
+                                        class="form-control" required pattern="\d+" title="Solo se permiten números">
+                                    <button type="button" class="btn btn-primary" id="btn-buscar-documento">
+                                        <i class="bi bi-search"></i> Buscar
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="nombres" class="form-label">Ingresar Nombres y Apellidos / Razón
+                                    Social:</label>
+                                <input type="text" id="nombres" name="nombres" class="form-control">
+                            </div>
+                            <div class="d-grid">
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary flex-fill">Ejecutar</button>
+                                    <button type="button" class="btn btn-secondary flex-fill"
+                                        id="btn-limpiar">Limpiar</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="container mb-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th style="width: 3%">#</th>
+                                        <th>Descripción</th>
+                                        <th style="width: 15%">Enlace</th>
+                                        <th>Observación</th>
+                                        <th style="width: 20%">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="text-center">1</td>
+                                        <td>Infogob | Observatorio para la Gobernabilidad</td>
+                                        <td><a href="https://infogob.jne.gob.pe/Politico"
+                                                target="_blank">https://infogob.jne.gob.pe/Politico</a></td>
+                                        <td>DNI</td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">2</td>
+                                        <td>Fuentes Abiertas - Google</td>
+                                        <td><a href="https://www.google.com" target="_blank">www.google.com</a></td>
+                                        <td>LAVADO DE ACTIVOS</td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">3</td>
+                                        <td>Fuentes Abiertas - Google</td>
+                                        <td><a href="https://www.google.com" target="_blank">www.google.com</a></td>
+                                        <td>DELITOS</td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">4</td>
+                                        <td>Identificación de empresas extranjeras.</td>
+                                        <td><a href="https://opencorporates.com/"
+                                                target="_blank">https://opencorporates.com/</a></td>
+                                        <td></td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">5</td>
+                                        <td>Búsqueda de proveedores del Estado</td>
+                                        <td><a href="https://apps.osce.gob.pe/perfilprov-ui/"
+                                                target="_blank">https://apps.osce.gob.pe/perfilprov-ui/</a></td>
+                                        <td></td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">6</td>
+                                        <td>Clientes que se dedican a la actividad minera</td>
+                                        <td><a href="https://www.gob.pe/867-buscar-en-el-registro-integral-de-formalizacion-minera-reinfo"
+                                                target="_blank">https://www.gob.pe/867-buscar-en-el-registro-integral-de-formalizacion-minera-reinfo</a>
+                                        </td>
+                                        <td>Búsqueda de PN o PJ que se dedican a la explotación o beneficio en el
+                                            segmento de pequeña minería y minería artesanal.</td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">7</td>
+                                        <td>Clientes que se dedican a la actividad minera</td>
+                                        <td><a href="https://datosabiertos.gob.pe/dataset/registro-especial-de-comercializadores-y-procesadores-de-oro"
+                                                target="_blank">https://datosabiertos.gob.pe/dataset/registro-especial-de-comercializadores-y-procesadores-de-oro</a>
+                                        </td>
+                                        <td>Búsqueda en el registro especial de comercializadores y procesadores de oro
+                                        </td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">8</td>
+                                        <td>Clientes que se dedican a la actividad de Construcción</td>
+                                        <td><a href="http://www.osce.gob.pe/consultasenlinea/inhabilitados/busqueda.asp?action=enviar&valor=0"
+                                                target="_blank">http://www.osce.gob.pe/consultasenlinea/inhabilitados/busqueda.asp?action=enviar&valor=0</a>
+                                        </td>
+                                        <td>Búsqueda de proveedores sancionados por el Tribunal de Contrataciones del
+                                            Estado con sanción vigente.</td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">9</td>
+                                        <td>Clientes que se dedican a la actividad de cambio de moneda extranjera.</td>
+                                        <td><a href="https://www.sbs.gob.pe/supervisados-y-registros/registros/otros-registros/casas-de-cambio-prestamos-y-empenos/casas-de-cambio"
+                                                target="_blank">https://www.sbs.gob.pe/supervisados-y-registros/registros/otros-registros/casas-de-cambio-prestamos-y-empenos/casas-de-cambio</a>
+                                        </td>
+                                        <td>Búsqueda de personas dedicadas al sistema cambiario registrada en la SBS
+                                        </td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">10</td>
+                                        <td>Clientes que se dedican a la actividad de préstamos y empeño.</td>
+                                        <td><a href="https://www.sbs.gob.pe/supervisados-y-registros/registros/otros-registros/casas-de-cambio-prestamos-y-empenos/casas-de-cambio"
+                                                target="_blank">https://www.sbs.gob.pe/supervisados-y-registros/registros/otros-registros/casas-de-cambio-prestamos-y-empenos/casas-de-cambio</a>
+                                        </td>
+                                        <td>Búsqueda de empresas y/o empeño registrado en la SBS</td>
+                                        <td class="text-center estado-loading"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3">
+                            <div id="descargar-archivo-container" style="display:none;">
+                                <a href="#" id="descargar-archivo-link"
+                                    class="link-primary text-decoration-underline fs-4 fw-bold">Descargar archivo</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        // 1. Seleccionar los elementos del DOM
+        const tipoDocumentoSelect = document.getElementById('tipo_documento');
+        const numeroDocumentoInput = document.getElementById('numero_documento');
+
+        // 2. Crear una función para actualizar el maxlength
+        function actualizarMaxLength() {
+            const tipoSeleccionado = tipoDocumentoSelect.value;
+
+            // 3. Usar una estructura condicional para definir el nuevo maxlength
+            if (tipoSeleccionado === 'DNI') {
+                numeroDocumentoInput.maxLength = 8;
+            } else if (tipoSeleccionado === 'RUC') {
+                numeroDocumentoInput.maxLength = 11;
+            } else {
+                // Para CARNET EXTRANJERÍA, PASAPORTE y el valor inicial ""
+                numeroDocumentoInput.maxLength = 12;
+            }
+
+            // Opcional: limpiar el campo si el tipo de documento cambia
+            numeroDocumentoInput.value = '';
+        }
+
+        // 4. Añadir un "event listener" para que la función se ejecute cada vez que el usuario cambie la selección
+        tipoDocumentoSelect.addEventListener('change', actualizarMaxLength);
+
+        // 5. (Buena práctica) Ejecutar la función una vez al cargar la página para establecer un estado inicial correcto
+        document.addEventListener('DOMContentLoaded', actualizarMaxLength);
+    </script>
+</body>
+
+</html>
