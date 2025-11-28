@@ -8,7 +8,7 @@ const fs = require('fs');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Usar puerto del hosting o 3000 local
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -58,18 +58,26 @@ app.post('/generar-pdf', async (req, res) => {
   try {
     console.log(`📄 Iniciando generación de PDF para: ${query}`);
 
-    browser = await puppeteer.launch({
-      headless: "new", // Modo headless para producción (Render no tiene GUI)
+    // Configuración para Render: usar Chromium del sistema
+    const launchOptions = {
+      headless: "new",
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled'
       ]
-    });
+    };
+
+    // Si estamos en Render (detectar por variable de entorno), usar chromium-browser
+    if (process.env.RENDER) {
+      launchOptions.executablePath = '/usr/bin/chromium-browser';
+    }
+
+    browser = await puppeteer.launch(launchOptions);
 
     const page = await browser.newPage();
 
-    // Headers realistas para parecer un navegador humano
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -162,7 +170,6 @@ app.post('/generar-pdf', async (req, res) => {
         console.log('✅ Captcha resuelto!');
         console.log('💉 Inyectando token y probando desbloqueo...');
 
-        // Estrategia 1: Inyectar token y recargar
         await page.evaluate((token) => {
           let textarea = document.getElementById('g-recaptcha-response');
           if (!textarea) {
@@ -179,25 +186,20 @@ app.post('/generar-pdf', async (req, res) => {
 
         console.log('🖱️ Simulando comportamiento humano...');
 
-        // Simular movimientos de mouse aleatorios
         await page.mouse.move(100, 100);
         await new Promise(r => setTimeout(r, 500));
         await page.mouse.move(300, 400);
         await new Promise(r => setTimeout(r, 500));
 
-        // Simular scroll
         await page.evaluate(() => {
           window.scrollBy(0, 100);
         });
         await new Promise(r => setTimeout(r, 1000));
 
-        // Esperar más tiempo para que Google procese
         await new Promise(r => setTimeout(r, 3000));
 
-        // Intentar hacer click en el checkbox o botón de submit del captcha
         console.log('🖱️ Intentando hacer click en elementos del captcha...');
         try {
-          // Buscar el iframe del recaptcha y el checkbox
           const recaptchaFrame = page.frames().find(frame => frame.url().includes('recaptcha/api2/anchor'));
           if (recaptchaFrame) {
             await recaptchaFrame.click('.recaptcha-checkbox-border');
@@ -205,7 +207,6 @@ app.post('/generar-pdf', async (req, res) => {
             await new Promise(r => setTimeout(r, 2000));
           }
 
-          // Intentar hacer click en el botón de submit si existe
           const submitButton = await page.$('button[type="submit"]');
           if (submitButton) {
             await submitButton.click();
@@ -216,12 +217,10 @@ app.post('/generar-pdf', async (req, res) => {
           console.log('ℹ️  No se encontraron elementos clicables del captcha');
         }
 
-        // Estrategia 2: Navegar de nuevo a la URL (la cookie del captcha ya está)
         console.log('🔄 Navegando de nuevo a la URL con la cookie del captcha...');
         await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
         await new Promise(r => setTimeout(r, 3000));
 
-        // Verificar si seguimos bloqueados
         const stillBlocked = await page.evaluate(() => {
           const text = document.body.innerText.toLowerCase();
           return text.includes('no soy un robot') || text.includes("i'm not a robot") ||
@@ -230,9 +229,6 @@ app.post('/generar-pdf', async (req, res) => {
 
         if (stillBlocked) {
           console.warn('⚠️ Advertencia: La página aún muestra bloqueo después de resolver el captcha.');
-          console.log('📸 Tomando screenshot para debug...');
-          await page.screenshot({ path: 'debug_captcha.png', fullPage: true });
-          console.log('💾 Screenshot guardado como debug_captcha.png');
         } else {
           console.log('🎉 Desbloqueo exitoso! Página accesible.');
         }
