@@ -10,6 +10,18 @@ Para evitar disparar protecciones por demasiadas peticiones, se añadió limitac
 - RATE_LIMIT_MAX (por defecto 6 requests por ventana)
 
 Puedes ajustar estas variables en Render.com o en tu `.env`.
+
+## Retries, backoff y diagnóstico
+
+Para mejorar la probabilidad de obtener resultados cuando Google bloquea por IP, la app soporta retries con rotación de proxies y backoff:
+
+- MAX_RETRIES — número máximo de reintentos (default 3)
+- RETRY_DELAY_MS — base de espera entre reintentos en ms (default 1500)
+- BACKOFF_MULT — multiplicador de backoff (default 1.8)
+
+También incluimos un endpoint de telemetría `/status` y un endpoint `/debug-captcha?query=...` para diagnosticar si una búsqueda muestra captcha y obtener el sitekey. Revisa `logs/telemetry.log` en el servidor para el histórico de intentos.
+
+Si quieres usar el plugin integrado `puppeteer-extra-plugin-recaptcha` en lugar del flujo REST manual, activa `USE_RECAPTCHA_PLUGIN=true` en producción (requiere `ANTI_CAPTCHA_KEY`).
 # Buscador de Páginas (Node.js + HTML)
 
 ## Estructura
@@ -49,7 +61,27 @@ También puedes usar un archivo `.env` local (no lo subas al repositorio):
 ANTI_CAPTCHA_KEY=tu_client_key_aqui
 ```
 
-Hemos incluido un `.env.example` como referencia — pon allí tu `ANTI_CAPTCHA_KEY` en desarrollo local.
+Hemos incluido un `.env.example` como referencia — **no** pongas claves reales en archivos rastreados por git.
+En local copia `.env.example` a `.env` y añade tu `ANTI_CAPTCHA_KEY` allí (este repo ya ignora `.env`).
+Si compartiste tu clave en público (por ejemplo en un chat), te recomiendo rotarla por seguridad.
+
+## Despliegue en Render.com (cheklist rápido)
+
+- Asegúrate de que tu servicio en Render use Node.js >= 18 (en `Environment` > `Runtime`).
+- Configura estas variables en Render -> Settings -> Environment -> Environment Variables:
+   - `ANTI_CAPTCHA_KEY` — tu clientKey de Anti-Captcha (obligatoria si ANTI_CAPTCHA_REQUIRED=true)
+   - `ANTI_CAPTCHA_REQUIRED` — true (default) o false para desarrollo sin key
+   - `PROXY_LIST` — (opcional) lista de proxies separados por comas
+   - `PARALLEL_CONCURRENCY`, `MAX_RETRIES`, `RATE_LIMIT_*` según necesidades
+- Start Command en Render: `npm start` (ya definido en package.json)
+- Verifica que la instancia tenga recursos para ejecutar Puppeteer/Chromium; si hay errores de Chromium revisa los logs y añade las dependencias del sistema si hace falta.
+
+## Endpoints útiles para operaciones y diagnóstico
+
+- `POST /generar-pdf` — ruta principal protegida por rate-limit para generar PDF.
+- `GET /debug-captcha?query=...` — revisa si una búsqueda genera captcha y devuelve siteKey.
+- `GET /status` — estado/telemetría: intentos, pool de proxies, si la key está configurada.
+- `GET /proxy-health` — lanza una comprobación de salud de proxies listados en `PROXY_LIST`.
 
 ## Notas
 - Si quieres usar la versión PHP, usa XAMPP/WAMP y accede a `buscador_legacy.php`.

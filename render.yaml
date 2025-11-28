@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: buscador-app
+    env: node
+    plan: starter
+    branch: main
+    buildCommand: "npm ci && npx puppeteer@latest install"
+    startCommand: "npm start"
+    healthCheckPath: "/status"
+    envVars:
+      - key: ANTI_CAPTCHA_REQUIRED
+        value: "true"
+      - key: PUPPETEER_CACHE_DIR
+        value: "./.cache/puppeteer"
