@@ -358,6 +358,16 @@ app.get('/api/dni/:dni', async (req, res) => {
   return res.json({ ok: true, source: 'mock', data: mock });
 });
 
+// Endpoint de versión/diagnóstico para confirmar el despliegue
+app.get('/version', (req, res) => {
+  try {
+    const pkg = require('./package.json');
+    return res.json({ ok: true, commit: process.env.DEPLOY_COMMIT || null, version: pkg.version || null, ts: new Date().toISOString() });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 const server = app.listen(PORT, () => console.log(`🚀 Servidor en http://localhost:${PORT}`));
 
 server.on('error', (e) => {
