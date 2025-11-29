@@ -351,7 +351,7 @@ app.get('/api/dni/:dni', async (req, res) => {
       if (r && r.data) {
         await telemetryAppend({ timestamp: new Date().toISOString(), query: `dni=${dni}`, upstream: url.toString(), success: true });
         if (typeof r.data === 'object') return res.status(r.status).json({ ok: true, source: 'upstream', data: r.data });
-        return res.status(r.status).json({ ok: true, source: 'upstream', raw: String(r.data) });
+        return res.status(r.status).json({ ok: true, source: 'upstream', raw: String(r.data.data[0]) });
       }
       return res.status(502).json({ ok: false, error: 'empty_upstream_response' });
     } catch (e) {
