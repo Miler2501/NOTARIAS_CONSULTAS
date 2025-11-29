@@ -362,7 +362,15 @@ app.get('/api/dni/:dni', async (req, res) => {
 app.get('/version', (req, res) => {
   try {
     const pkg = require('./package.json');
-    return res.json({ ok: true, commit: process.env.DEPLOY_COMMIT || null, version: pkg.version || null, ts: new Date().toISOString() });
+    let commit = process.env.DEPLOY_COMMIT || null;
+    if (!commit) {
+      try {
+        const p = require('path');
+        const fp = p.join(__dirname, 'deploy.sha');
+        if (require('fs').existsSync(fp)) commit = require('fs').readFileSync(fp, 'utf8').trim();
+      } catch (e) { }
+    }
+    return res.json({ ok: true, commit: commit, version: pkg.version || null, ts: new Date().toISOString() });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
