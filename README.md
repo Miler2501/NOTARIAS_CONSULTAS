@@ -80,6 +80,8 @@ Si compartiste tu clave en público (por ejemplo en un chat), te recomiendo rota
 
 - `POST /generar-pdf` — ruta principal protegida por rate-limit para generar PDF.
 - `GET /debug-captcha?query=...` — revisa si una búsqueda genera captcha y devuelve siteKey.
+- `GET /debug-captcha?query=...` — revisa si una búsqueda genera captcha y devuelve siteKey.
+- `GET /api/dni/:dni` — búsqueda de DNI. Por defecto devuelve un mock; si configuras `DNI_API_URL` y (opcional) `DNI_API_SEED` la app reenviará la consulta a ese servicio y devolverá su resultado.
 - `GET /status` — estado/telemetría: intentos, pool de proxies, si la key está configurada.
 - `GET /proxy-health` — lanza una comprobación de salud de proxies listados en `PROXY_LIST`.
 

@@ -332,14 +332,30 @@ app.get('/api/dni/:dni', async (req, res) => {
   const { dni } = req.params;
   if (!/^[0-9]{8}$/.test(dni)) return res.status(400).json({ ok: false, error: 'dni_invalid', message: 'El DNI debe tener 8 dígitos numéricos' });
 
-  // Si existe una URL externa, reenvía la petición
+  // Si existe una URL externa, reenvía la petición.
+  // Soporta el servicio de consultas tipo: https://hostingviper.com/consultas/public/buscar?semilla=SEED&dni=... 
   const upstream = process.env.DNI_API_URL;
+  const seed = process.env.DNI_API_SEED || process.env.DNI_API_KEY || null;
   if (upstream) {
     try {
-      const base = upstream.replace(/\/$/, '');
-      const r = await axios.get(`${base}/api/dni/${dni}`, { timeout: 10000 });
-      return res.status(r.status).json(r.data);
+      // Construir query de acuerdo al formato del upstream
+      const url = new URL(upstream);
+      // si upstream ya incluye query params, mantenlas
+      url.searchParams.set('dni', dni);
+      if (seed) url.searchParams.set('semilla', seed);
+
+      const r = await axios.get(url.toString(), { timeout: 10000 });
+
+      // Normalizar respuesta: muchos upstream devuelven HTML o JSON
+      // Intentamos devolver JSON tal cual si r.data ya es objeto, si es string lo devolvemos bajo 'raw'
+      if (r && r.data) {
+        await telemetryAppend({ timestamp: new Date().toISOString(), query: `dni=${dni}`, upstream: url.toString(), success: true });
+        if (typeof r.data === 'object') return res.status(r.status).json({ ok: true, source: 'upstream', data: r.data });
+        return res.status(r.status).json({ ok: true, source: 'upstream', raw: String(r.data) });
+      }
+      return res.status(502).json({ ok: false, error: 'empty_upstream_response' });
     } catch (e) {
+      await telemetryAppend({ timestamp: new Date().toISOString(), query: `dni=${dni}`, upstream: upstream, success: false, error: e.message });
       return res.status(502).json({ ok: false, error: 'upstream_error', details: e.message });
     }
   }
