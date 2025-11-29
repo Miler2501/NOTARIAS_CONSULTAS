@@ -350,8 +350,37 @@ app.get('/api/dni/:dni', async (req, res) => {
       // Intentamos devolver JSON tal cual si r.data ya es objeto, si es string lo devolvemos bajo 'raw'
       if (r && r.data) {
         await telemetryAppend({ timestamp: new Date().toISOString(), query: `dni=${dni}`, upstream: url.toString(), success: true });
-        if (typeof r.data === 'object') return res.status(r.status).json({ ok: true, source: 'upstream', data: r.data });
-        return res.status(r.status).json({ ok: true, source: 'upstream', raw: String(r.data.data[0]) });
+        // Normalizar la respuesta para que el frontend reciba `response.data` como array
+        let out = null;
+        try {
+          if (Array.isArray(r.data)) {
+            out = r.data;
+          } else if (Array.isArray(r.data.data)) {
+            out = r.data.data;
+          } else if (typeof r.data === 'object') {
+            // Si el objeto contiene campos como NOMBRES / AP_PAT, envolver en array
+            if (r.data.NOMBRES || r.data.NOMBR || r.data.NOMBRE || r.data.AP_PAT || r.data.DNI) {
+              out = [r.data];
+            } else {
+              // intentar buscar primeras claves anidadas que sean arrays
+              const vals = Object.values(r.data).find(v => Array.isArray(v));
+              out = vals || [];
+            }
+          } else if (typeof r.data === 'string') {
+            // intentar parsear JSON string
+            try {
+              const parsed = JSON.parse(r.data);
+              if (Array.isArray(parsed)) out = parsed; else if (Array.isArray(parsed.data)) out = parsed.data; else out = [parsed];
+            } catch (e) {
+              out = [{ raw: String(r.data) }];
+            }
+          }
+
+          if (!out || out.length === 0) return res.status(404).json({ ok: false, error: 'no_data', message: 'No se encontró información para este DNI' });
+          return res.status(200).json({ ok: true, source: 'upstream', data: out });
+        } catch (e) {
+          return res.status(502).json({ ok: false, error: 'normalize_error', details: e.message });
+        }
       }
       return res.status(502).json({ ok: false, error: 'empty_upstream_response' });
     } catch (e) {
@@ -361,16 +390,16 @@ app.get('/api/dni/:dni', async (req, res) => {
   }
 
   // Respuesta mock para pruebas locales / despliegue rápido
-  const mock = {
-    dni,
-    nombres: 'JUAN CARLOS',
-    apellido_paterno: 'PEREZ',
-    apellido_materno: 'GOMEZ',
+  const mock = [{
+    DNI: dni,
+    NOMBRES: 'JUAN CARLOS',
+    AP_PAT: 'PEREZ',
+    AP_MAT: 'GOMEZ',
     fecha_nacimiento: '1987-06-15',
     distrito: 'LIMA',
     departamento: 'LIMA',
     estado: 'ACTIVO'
-  };
+  }];
   return res.json({ ok: true, source: 'mock', data: mock });
 });
 

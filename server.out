@@ -2,4 +2,5 @@
 > buscador-app@1.0.0 start
 > node server.js
 
+⚠️ ANTI_CAPTCHA_KEY no encontrada. La app continuará pero no resolverá captchas automáticamente. Para producción habilita ANTI_CAPTCHA_KEY o activa ANTI_CAPTCHA_REQUIRED.
 🚀 Servidor en http://localhost:3000
